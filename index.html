@@ -892,6 +892,39 @@ const firebaseConfig = {
   </div>
 </div>
 
+<!-- Modal: Sửa cơ quan/bộ phận -->
+<div class="modal-overlay" id="modal-edit-dept">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fas fa-pen" style="color:var(--primary-light);margin-right:8px;"></i>Sửa thông tin cơ quan / Bộ phận</div>
+      <button class="modal-close" onclick="closeModal('modal-edit-dept')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ed-id">
+      <div class="form-group">
+        <label class="form-label">Tên cơ quan / Bộ phận *</label>
+        <input class="form-control" id="ed-name" placeholder="Tên cơ quan...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Thủ trưởng cơ quan</label>
+        <input class="form-control" id="ed-head" placeholder="Họ tên thủ trưởng...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Số lượng đảng viên</label>
+        <input class="form-control" id="ed-count" type="number" value="0" min="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ghi chú</label>
+        <textarea class="form-control" id="ed-note" placeholder="Ghi chú (nếu có)..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-edit-dept')">Hủy</button>
+      <button class="btn btn-primary" onclick="updateDept()"><i class="fas fa-floppy-disk"></i> Lưu thay đổi</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Thêm tài khoản -->
 <div class="modal-overlay" id="modal-new-account">
   <div class="modal">
@@ -1630,16 +1663,59 @@ async function loadDepartments() {
       const deptUsers = users.filter(u=>u.department===d.name&&u.active!==false);
       const done = deptTasks.filter(t=>['done_early','done_ontime','done_late'].includes(t.status));
       const pct = deptTasks.length?Math.round(done.length/deptTasks.length*100):0;
-      return `<div style="background:white;border-radius:var(--radius);border:1.5px solid var(--border-light);padding:16px;transition:all .2s;" onmouseover="this.style.borderColor='var(--primary-light)'" onmouseout="this.style.borderColor='var(--border-light)'">
-        <div style="width:42px;height:42px;border-radius:12px;background:${colorMap[i%6]};color:${iconColorMap[i%6]};display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:10px;"><i class="fas ${iconMap[i%6]}"></i></div>
+      const esc = s => (s||'').replace(/'/g,"\'").replace(/"/g,'&quot;');
+      return `<div style="background:white;border-radius:var(--radius);border:1.5px solid var(--border-light);padding:16px;transition:all .2s;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+          <div style="width:42px;height:42px;border-radius:12px;background:${colorMap[i%6]};color:${iconColorMap[i%6]};display:flex;align-items:center;justify-content:center;font-size:18px;"><i class="fas ${iconMap[i%6]}"></i></div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-outline btn-sm btn-icon" title="Sửa" onclick="editDept('${d.id}','${esc(d.name)}','${esc(d.head||'')}','${d.memberCount||0}','${esc(d.note||'')}')"><i class="fas fa-pen"></i></button>
+            <button class="btn btn-sm btn-icon" title="Xóa" style="background:var(--danger-light);color:var(--danger);border:1px solid var(--danger);cursor:pointer;" onclick="deleteDept('${d.id}','${esc(d.name)}')"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
         <div style="font-size:13.5px;font-weight:800;color:var(--text-primary);margin-bottom:3px;">${d.name}</div>
         <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:10px;"><i class="fas fa-user" style="font-size:10px;margin-right:4px;"></i>${d.head||'Chưa có'} · ${deptUsers.length} đảng viên</div>
         <div style="display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:5px;"><span style="color:var(--text-muted);">${done.length}/${deptTasks.length} NV</span><strong style="color:${pct>=85?'var(--success)':pct>=70?'var(--primary-light)':'var(--danger)'};">${pct}%</strong></div>
-        <div class="prog-wrap"><div class="prog-bar" style="width:${pct}%;background:${pct>=85?'var(--success)':pct>=70?'var(--primary-light)':'var(--danger)'};"></div></div>
+        <div class="prog-wrap"><div class="prog-bar" style="width:${pct}%;background:${pct>=85?'var(--success)':pct>=70?'var(--primary-light)':'var(--danger)'};">
+        </div></div>
       </div>`;
     }).join('');
     await loadDeptDropdowns();
   } catch(e){ document.getElementById('depts-grid').innerHTML='<div class="empty-state" style="grid-column:1/-1;"><i class="fas fa-exclamation-circle" style="color:var(--warning);opacity:1;"></i><p>Chưa kết nối Firebase.</p></div>'; }
+}
+
+function editDept(id, name, head, count, note) {
+  document.getElementById('ed-id').value = id;
+  document.getElementById('ed-name').value = name;
+  document.getElementById('ed-head').value = head;
+  document.getElementById('ed-count').value = count;
+  document.getElementById('ed-note').value = note;
+  openModal('modal-edit-dept');
+}
+
+async function updateDept() {
+  const id = document.getElementById('ed-id').value;
+  const name = document.getElementById('ed-name').value.trim();
+  const head = document.getElementById('ed-head').value.trim();
+  const count = parseInt(document.getElementById('ed-count').value) || 0;
+  const note = document.getElementById('ed-note').value.trim();
+  if (!name) { showToast('Vui lòng nhập tên cơ quan!', 'warning'); return; }
+  try {
+    await fsUpdate('departments', id, { name, head, memberCount: count, note });
+    closeModal('modal-edit-dept');
+    showToast('Đã cập nhật: ' + name, 'success');
+    loadDepartments();
+    loadDeptDropdowns();
+  } catch(e) { showToast('Lỗi: ' + e.message, 'danger'); }
+}
+
+async function deleteDept(id, name) {
+  if (!confirm('Bạn có chắc muốn xóa cơ quan "' + name + '" không?')) return;
+  try {
+    await window._fb.deleteDoc(window._fb.doc(window._fb.db, 'departments', id));
+    showToast('Đã xóa: ' + name, 'success');
+    loadDepartments();
+    loadDeptDropdowns();
+  } catch(e) { showToast('Lỗi: ' + e.message, 'danger'); }
 }
 
 // ============================================================
