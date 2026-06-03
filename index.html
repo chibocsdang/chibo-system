@@ -860,6 +860,62 @@ const firebaseConfig = {
   </div>
 </div>
 
+<!-- Modal: Thêm cơ quan/bộ phận -->
+<div class="modal-overlay" id="modal-new-dept">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fas fa-sitemap" style="color:var(--accent);margin-right:8px;"></i>Thêm cơ quan / Bộ phận</div>
+      <button class="modal-close" onclick="closeModal('modal-new-dept')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Tên cơ quan / Bộ phận *</label>
+        <input class="form-control" id="nd-name" placeholder="Ví dụ: Văn phòng Đảng ủy xã...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Thủ trưởng cơ quan</label>
+        <input class="form-control" id="nd-head" placeholder="Họ tên thủ trưởng...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Số lượng đảng viên</label>
+        <input class="form-control" id="nd-count" type="number" value="0" min="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ghi chú</label>
+        <textarea class="form-control" id="nd-note" placeholder="Ghi chú thêm (nếu có)..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-new-dept')">Hủy</button>
+      <button class="btn btn-accent" onclick="saveDept()"><i class="fas fa-check"></i> Lưu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Thêm tài khoản -->
+<div class="modal-overlay" id="modal-new-account">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fas fa-user-plus" style="color:var(--accent);margin-right:8px;"></i>Thêm tài khoản mới</div>
+      <button class="modal-close" onclick="closeModal('modal-new-account')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-info"><i class="fas fa-circle-info"></i><div>Sau khi tạo hồ sơ ở đây, vào <strong>Firebase Console → Authentication → Add user</strong> để tạo tài khoản đăng nhập.</div></div>
+      <div class="form-group"><label class="form-label">Họ và tên *</label><input class="form-control" id="na-name" placeholder="Nhập họ tên..."></div>
+      <div class="form-group"><label class="form-label">Email *</label><input class="form-control" id="na-email" type="email" placeholder="email@gmail.com"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Cơ quan *</label><select class="form-control form-select" id="na-dept"><option value="">-- Chọn --</option></select></div>
+        <div class="form-group"><label class="form-label">Vai trò *</label><select class="form-control form-select" id="na-role"><option value="dangvien">Đảng viên</option><option value="thuutruong">Thủ trưởng CQ</option><option value="capuy">Cấp ủy</option><option value="bithuu">Bí thư</option><option value="quantri">Quản trị viên</option></select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Chức danh</label><input class="form-control" id="na-title" placeholder="Chức danh, vị trí việc làm..."></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-new-account')">Hủy</button>
+      <button class="btn btn-success" onclick="saveAccount()"><i class="fas fa-check"></i> Lưu hồ sơ</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-new-event">
   <div class="modal">
     <div class="modal-header"><div class="modal-title"><i class="fas fa-calendar-plus" style="color:var(--accent);margin-right:8px;"></i>Thêm sự kiện lịch công tác</div><button class="modal-close" onclick="closeModal('modal-new-event')"><i class="fas fa-times"></i></button></div>
@@ -1712,6 +1768,51 @@ async function loadSettings() {
       if(d.meetingDay) document.getElementById('cfg-meeting').value=d.meetingDay;
     }
   } catch(e){}
+}
+
+// ============================================================
+// DEPARTMENTS - SAVE
+// ============================================================
+async function saveDept() {
+  const name = document.getElementById('nd-name').value.trim();
+  const head = document.getElementById('nd-head').value.trim();
+  const count = parseInt(document.getElementById('nd-count').value) || 0;
+  const note = document.getElementById('nd-note').value.trim();
+  if (!name) { showToast('Vui lòng nhập tên cơ quan!', 'warning'); return; }
+  try {
+    await fsAdd('departments', { name, head, memberCount: count, note, taskCount: 0, doneCount: 0, score: 0 });
+    closeModal('modal-new-dept');
+    showToast('Đã thêm cơ quan: ' + name, 'success');
+    // Clear form
+    document.getElementById('nd-name').value = '';
+    document.getElementById('nd-head').value = '';
+    document.getElementById('nd-count').value = '0';
+    document.getElementById('nd-note').value = '';
+    loadDepartments();
+    loadDeptDropdowns();
+  } catch(e) { showToast('Lỗi: ' + e.message, 'danger'); }
+}
+
+// ============================================================
+// ACCOUNT - SAVE
+// ============================================================
+async function saveAccount() {
+  const name = document.getElementById('na-name').value.trim();
+  const email = document.getElementById('na-email').value.trim();
+  const dept = document.getElementById('na-dept').value;
+  const role = document.getElementById('na-role').value;
+  const title = document.getElementById('na-title').value.trim();
+  if (!name || !email || !dept) { showToast('Vui lòng điền đủ thông tin!', 'warning'); return; }
+  try {
+    await fsAdd('users', { displayName: name, email, department: dept, role, jobTitle: title, active: true, taskCount: 0, doneCount: 0, totalScore: 0 });
+    closeModal('modal-new-account');
+    showToast('Đã lưu hồ sơ ' + name + '. Nhớ tạo tài khoản đăng nhập trong Firebase Console!', 'success');
+    document.getElementById('na-name').value = '';
+    document.getElementById('na-email').value = '';
+    document.getElementById('na-title').value = '';
+    loadMembers();
+    loadAccounts();
+  } catch(e) { showToast('Lỗi: ' + e.message, 'danger'); }
 }
 
 // ============================================================
