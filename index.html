@@ -519,6 +519,7 @@ textarea.form-control{resize:vertical;min-height:78px;}
       <div class="nav-item role-admin" onclick="showPage('departments')"><i class="fas fa-sitemap"></i> Cơ quan / Bộ phận</div>
       <div class="nav-item role-admin" onclick="showPage('permissions')"><i class="fas fa-shield-halved"></i> Phân quyền</div>
       <div class="nav-item role-admin" onclick="showPage('settings')"><i class="fas fa-gear"></i> Cấu hình hệ thống</div>
+      <div class="nav-item" onclick="showPage('feedback')"><i class="fas fa-comments-dollar"></i> Góp ý & Phản hồi<span class="nav-badge" id="fb-badge" style="display:none">0</span></div>
     </nav>
     <div class="sidebar-bottom">
       <div class="logout-btn" onclick="doLogout()"><i class="fas fa-right-from-bracket"></i> Đăng xuất</div>
@@ -749,6 +750,76 @@ const firebaseConfig = {
         </div>
       </div>
 
+      <!-- FEEDBACK PAGE -->
+      <div id="page-feedback" class="page">
+        <div class="page-header">
+          <div>
+            <div class="page-header-title">Góp ý & Phản hồi</div>
+            <div class="page-header-sub">Đánh giá tính năng và đề xuất cải tiến hệ thống trong quá trình thử nghiệm</div>
+          </div>
+          <div style="display:flex;gap:10px;">
+            <button class="btn btn-outline" onclick="exportFeedbackReport()"><i class="fas fa-file-export"></i> Xuất báo cáo</button>
+            <button class="btn btn-accent" onclick="openModal('modal-new-feedback')"><i class="fas fa-plus"></i> Gửi góp ý</button>
+          </div>
+        </div>
+
+        <!-- Stats row -->
+        <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;" id="fb-stats">
+          <div class="stat-card blue"><div class="stat-icon"><i class="fas fa-comment-dots"></i></div><div class="stat-value" id="fb-total">0</div><div class="stat-label">Tổng góp ý</div></div>
+          <div class="stat-card orange"><div class="stat-icon"><i class="fas fa-clock"></i></div><div class="stat-value" id="fb-pending">0</div><div class="stat-label">Chờ xử lý</div></div>
+          <div class="stat-card green"><div class="stat-icon"><i class="fas fa-check-circle"></i></div><div class="stat-value" id="fb-done">0</div><div class="stat-label">Đã tiếp thu</div></div>
+          <div class="stat-card red"><div class="stat-icon"><i class="fas fa-star"></i></div><div class="stat-value" id="fb-avgstar">--</div><div class="stat-label">Điểm trung bình</div></div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs" id="fb-tabs" style="margin-bottom:16px;">
+          <button class="tab-btn active" onclick="fbTab(this,'all')">Tất cả</button>
+          <button class="tab-btn" onclick="fbTab(this,'bug')">🐛 Lỗi hệ thống</button>
+          <button class="tab-btn" onclick="fbTab(this,'feature')">💡 Đề xuất tính năng</button>
+          <button class="tab-btn" onclick="fbTab(this,'ui')">🎨 Giao diện</button>
+          <button class="tab-btn" onclick="fbTab(this,'other')">📝 Khác</button>
+        </div>
+
+        <div class="grid-65-35">
+          <!-- Danh sách góp ý -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Danh sách góp ý</div>
+              <select class="form-control form-select" style="width:auto;font-size:12px;padding:5px 28px 5px 11px;" id="fb-sort" onchange="loadFeedback()">
+                <option value="new">Mới nhất</option>
+                <option value="old">Cũ nhất</option>
+                <option value="star">Đánh giá cao nhất</option>
+                <option value="pending">Chờ xử lý trước</option>
+              </select>
+            </div>
+            <div id="fb-list"><div class="empty-state"><i class="fas fa-spinner fa-spin"></i><p>Đang tải...</p></div></div>
+          </div>
+
+          <!-- Thống kê & Biểu đồ -->
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <!-- Đánh giá sao tổng hợp -->
+            <div class="card">
+              <div class="card-header"><div class="card-title">Đánh giá tổng thể</div></div>
+              <div id="fb-star-chart" style="text-align:center;padding:8px 0;">
+                <div style="font-size:40px;font-weight:900;color:var(--accent);" id="fb-big-star">--</div>
+                <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">/ 5 sao</div>
+                <div id="fb-star-bars"></div>
+              </div>
+            </div>
+            <!-- Phân loại góp ý -->
+            <div class="card">
+              <div class="card-header"><div class="card-title">Phân loại góp ý</div></div>
+              <div id="fb-category-chart"></div>
+            </div>
+            <!-- Góp ý gần đây chưa xử lý -->
+            <div class="card">
+              <div class="card-header"><div class="card-title" style="color:var(--warning);"><i class="fas fa-triangle-exclamation"></i> Cần xử lý</div></div>
+              <div id="fb-urgent-list"><div class="empty-state"><i class="fas fa-check-circle" style="color:var(--success);opacity:1;"></i><p>Không có góp ý cần xử lý!</p></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- CHAT -->
       <div id="page-chat" class="page">
         <div style="background:var(--info-light);border:1px solid #90cae8;border-radius:10px;padding:16px;margin-bottom:16px;font-size:13px;color:#1a5f86;">
@@ -949,6 +1020,93 @@ const firebaseConfig = {
   </div>
 </div>
 
+<!-- Modal: Gửi góp ý mới -->
+<div class="modal-overlay" id="modal-new-feedback">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fas fa-comment-dots" style="color:var(--accent);margin-right:8px;"></i>Gửi góp ý & Phản hồi</div>
+      <button class="modal-close" onclick="closeModal('modal-new-feedback')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-info"><i class="fas fa-circle-info"></i><div>Góp ý của bạn sẽ được gửi đến Quản trị viên để cải thiện hệ thống. Mọi ý kiến đều được trân trọng!</div></div>
+      <div class="form-group">
+        <label class="form-label">Tiêu đề góp ý *</label>
+        <input class="form-control" id="nf-title" placeholder="Mô tả ngắn gọn vấn đề hoặc đề xuất...">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Loại góp ý *</label>
+          <select class="form-control form-select" id="nf-type">
+            <option value="bug">🐛 Lỗi hệ thống</option>
+            <option value="feature">💡 Đề xuất tính năng mới</option>
+            <option value="ui">🎨 Góp ý giao diện</option>
+            <option value="other">📝 Ý kiến khác</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mức độ ưu tiên</label>
+          <select class="form-control form-select" id="nf-priority">
+            <option value="low">Thấp — Không ảnh hưởng lớn</option>
+            <option value="medium" selected>Trung bình — Cần xem xét</option>
+            <option value="high">Cao — Ảnh hưởng đến công việc</option>
+            <option value="critical">Khẩn cấp — Cần xử lý ngay</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mô tả chi tiết *</label>
+        <textarea class="form-control" id="nf-content" rows="4" placeholder="Mô tả chi tiết vấn đề, cách tái hiện lỗi, hoặc tính năng mong muốn..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tính năng liên quan</label>
+        <select class="form-control form-select" id="nf-module">
+          <option value="">-- Chọn tính năng (nếu có) --</option>
+          <option value="dashboard">Dashboard tổng quan</option>
+          <option value="tasks">Nhiệm vụ cá nhân</option>
+          <option value="collective">Nhiệm vụ tập thể</option>
+          <option value="calendar">Lịch công tác</option>
+          <option value="chat">Nhắn tin nội bộ</option>
+          <option value="scoring">Chấm điểm</option>
+          <option value="ranking">Xếp loại</option>
+          <option value="reports">Báo cáo</option>
+          <option value="members">Đảng viên</option>
+          <option value="permissions">Phân quyền</option>
+          <option value="settings">Cấu hình</option>
+          <option value="general">Toàn bộ hệ thống</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Đánh giá tổng thể hệ thống</label>
+        <div id="star-rating" style="display:flex;gap:8px;font-size:28px;cursor:pointer;margin-top:4px;">
+          <span onclick="setStar(1)" onmouseover="hoverStar(1)" onmouseout="resetStars()" data-star="1">☆</span>
+          <span onclick="setStar(2)" onmouseover="hoverStar(2)" onmouseout="resetStars()" data-star="2">☆</span>
+          <span onclick="setStar(3)" onmouseover="hoverStar(3)" onmouseout="resetStars()" data-star="3">☆</span>
+          <span onclick="setStar(4)" onmouseover="hoverStar(4)" onmouseout="resetStars()" data-star="4">☆</span>
+          <span onclick="setStar(5)" onmouseover="hoverStar(5)" onmouseout="resetStars()" data-star="5">☆</span>
+        </div>
+        <input type="hidden" id="nf-star" value="0">
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;" id="star-label">Nhấn để đánh giá</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-new-feedback')">Hủy</button>
+      <button class="btn btn-accent" onclick="saveFeedback()"><i class="fas fa-paper-plane"></i> Gửi góp ý</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Xem & Phản hồi góp ý (Admin) -->
+<div class="modal-overlay" id="modal-view-feedback">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-title" id="vf-title">Chi tiết góp ý</div>
+      <button class="modal-close" onclick="closeModal('modal-view-feedback')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="vf-body"></div>
+    <div class="modal-footer" id="vf-footer"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-new-event">
   <div class="modal">
     <div class="modal-header"><div class="modal-title"><i class="fas fa-calendar-plus" style="color:var(--accent);margin-right:8px;"></i>Thêm sự kiện lịch công tác</div><button class="modal-close" onclick="closeModal('modal-new-event')"><i class="fas fa-times"></i></button></div>
@@ -1071,6 +1229,7 @@ const pageTitles = {
   permissions:['Phân quyền','Vai trò và quyền truy cập'],
   settings:['Cấu hình hệ thống','Thiết lập vận hành'],
   chat:['Nhắn tin nội bộ','Trao đổi trong Chi bộ'],
+  feedback:['Góp ý & Phản hồi','Đánh giá và đề xuất cải tiến hệ thống'],
 };
 
 function showPage(id) {
@@ -1091,6 +1250,7 @@ function showPage(id) {
   if(id==='collective') loadCollective();
   if(id==='alerts') loadAlerts();
   if(id==='departments') loadDepartments();
+  if(id==='feedback') loadFeedback();
   if(id==='calendar') renderCalendar();
 }
 
@@ -1894,6 +2054,331 @@ async function saveAccount() {
 // ============================================================
 // EXPORT REPORT
 // ============================================================
+
+// ============================================================
+// FEEDBACK MODULE
+// ============================================================
+
+let _currentFbType = 'all';
+let _currentFbRating = 0;
+
+// Star rating UI
+function setStar(n) {
+  _currentFbRating = n;
+  document.getElementById('nf-star').value = n;
+  const labels = ['','Rất kém','Kém','Tạm được','Tốt','Rất tốt — Xuất sắc!'];
+  document.getElementById('star-label').textContent = '★'.repeat(n) + '☆'.repeat(5-n) + '  ' + labels[n];
+  renderStars(n);
+}
+function hoverStar(n) { renderStars(n); }
+function resetStars() { renderStars(_currentFbRating); }
+function renderStars(n) {
+  const stars = document.querySelectorAll('#star-rating span');
+  stars.forEach((s,i) => { s.textContent = i < n ? '★' : '☆'; s.style.color = i < n ? 'var(--accent)' : 'var(--text-muted)'; });
+}
+
+// Tab filter
+function fbTab(el, type) {
+  document.querySelectorAll('#fb-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  _currentFbType = type;
+  loadFeedback();
+}
+
+// Save feedback
+async function saveFeedback() {
+  const title = document.getElementById('nf-title').value.trim();
+  const content = document.getElementById('nf-content').value.trim();
+  const type = document.getElementById('nf-type').value;
+  const priority = document.getElementById('nf-priority').value;
+  const module = document.getElementById('nf-module').value;
+  const star = parseInt(document.getElementById('nf-star').value) || 0;
+  if (!title || !content) { showToast('Vui lòng điền tiêu đề và mô tả!', 'warning'); return; }
+  try {
+    const u = window.currentUserData;
+    await fsAdd('feedback', {
+      title, content, type, priority, module, star,
+      authorId: window.currentUser?.uid || '',
+      authorName: u?.displayName || u?.email || 'Ẩn danh',
+      authorDept: u?.department || '',
+      status: 'pending',
+      adminReply: '',
+      repliedBy: '',
+    });
+    closeModal('modal-new-feedback');
+    showToast('Đã gửi góp ý! Cảm ơn bạn 🙏', 'success');
+    // Reset form
+    document.getElementById('nf-title').value = '';
+    document.getElementById('nf-content').value = '';
+    document.getElementById('nf-star').value = '0';
+    _currentFbRating = 0;
+    renderStars(0);
+    document.getElementById('star-label').textContent = 'Nhấn để đánh giá';
+    loadFeedback();
+  } catch(e) { showToast('Lỗi: ' + e.message, 'danger'); }
+}
+
+// Load feedback list
+async function loadFeedback() {
+  try {
+    let items = await fsGetAll('feedback');
+    // Sort
+    const sort = document.getElementById('fb-sort')?.value || 'new';
+    items.sort((a,b) => {
+      if (sort === 'new') return (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0);
+      if (sort === 'old') return (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0);
+      if (sort === 'star') return (b.star||0) - (a.star||0);
+      if (sort === 'pending') return (a.status === 'pending' ? -1 : 1);
+      return 0;
+    });
+    // Filter by type
+    const filtered = _currentFbType === 'all' ? items : items.filter(f => f.type === _currentFbType);
+    // Update stats
+    const total = items.length;
+    const pending = items.filter(f => f.status === 'pending').length;
+    const done = items.filter(f => f.status === 'done').length;
+    const avgStar = total ? (items.reduce((s,f) => s + (f.star||0), 0) / total).toFixed(1) : '--';
+    document.getElementById('fb-total').textContent = total;
+    document.getElementById('fb-pending').textContent = pending;
+    document.getElementById('fb-done').textContent = done;
+    document.getElementById('fb-avgstar').textContent = avgStar !== '--' ? avgStar + '★' : '--';
+    document.getElementById('fb-big-star').textContent = avgStar !== '--' ? avgStar : '--';
+    // Badge
+    const badge = document.getElementById('fb-badge');
+    if (badge) { badge.textContent = pending; badge.style.display = pending > 0 ? '' : 'none'; }
+    // Star bars
+    renderStarBars(items);
+    // Category chart
+    renderCategoryChart(items);
+    // Urgent list
+    const urgent = items.filter(f => f.status === 'pending' && ['high','critical'].includes(f.priority)).slice(0,4);
+    renderUrgentList(urgent);
+    // Main list
+    renderFeedbackList(filtered);
+  } catch(e) {
+    document.getElementById('fb-list').innerHTML = '<div class="empty-state"><i class="fas fa-comment-slash"></i><p>Chưa có góp ý nào. Nhấn "Gửi góp ý" để bắt đầu!</p></div>';
+  }
+}
+
+function renderStarBars(items) {
+  const el = document.getElementById('fb-star-bars');
+  if (!el) return;
+  let html = '';
+  for (let s = 5; s >= 1; s--) {
+    const count = items.filter(f => f.star === s).length;
+    const pct = items.length ? Math.round(count / items.length * 100) : 0;
+    html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:12px;">
+      <span style="width:30px;color:var(--accent);font-weight:700;">${s}★</span>
+      <div style="flex:1;background:var(--bg-main);border-radius:4px;height:8px;overflow:hidden;">
+        <div style="width:${pct}%;height:8px;background:var(--accent);border-radius:4px;"></div>
+      </div>
+      <span style="width:24px;color:var(--text-muted);font-size:11px;">${count}</span>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+function renderCategoryChart(items) {
+  const el = document.getElementById('fb-category-chart');
+  if (!el) return;
+  const cats = {bug:'🐛 Lỗi hệ thống',feature:'💡 Đề xuất tính năng',ui:'🎨 Giao diện',other:'📝 Khác'};
+  const colors = {bug:'var(--danger)',feature:'var(--success)',ui:'var(--info)',other:'var(--text-muted)'};
+  let html = '';
+  Object.entries(cats).forEach(([key, label]) => {
+    const count = items.filter(f => f.type === key).length;
+    const pct = items.length ? Math.round(count / items.length * 100) : 0;
+    html += `<div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+        <span>${label}</span><strong>${count}</strong>
+      </div>
+      <div style="background:var(--bg-main);border-radius:4px;height:8px;overflow:hidden;">
+        <div style="width:${pct}%;height:8px;background:${colors[key]};border-radius:4px;"></div>
+      </div>
+    </div>`;
+  });
+  el.innerHTML = html || '<div class="empty-state"><i class="fas fa-chart-pie"></i><p>Chưa có dữ liệu</p></div>';
+}
+
+function renderUrgentList(items) {
+  const el = document.getElementById('fb-urgent-list');
+  if (!el) return;
+  if (!items.length) {
+    el.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle" style="color:var(--success);opacity:1;"></i><p>Không có góp ý cần xử lý gấp!</p></div>';
+    return;
+  }
+  el.innerHTML = items.map(f => `
+    <div class="notif-item ${f.status==='pending'?'unread':''}" onclick="viewFeedback('${f.id}')">
+      <div class="notif-icon ${f.priority==='critical'?'dang':'warn'}">
+        <i class="fas ${f.priority==='critical'?'fa-circle-exclamation':'fa-triangle-exclamation'}"></i>
+      </div>
+      <div>
+        <div class="notif-title">${f.title}</div>
+        <div class="notif-time">${f.authorName} · ${fbTypeLabel(f.type)}</div>
+      </div>
+    </div>`).join('');
+}
+
+function fbTypeLabel(t) {
+  return {bug:'🐛 Lỗi',feature:'💡 Đề xuất',ui:'🎨 Giao diện',other:'📝 Khác'}[t] || t;
+}
+function fbPriorityBadge(p) {
+  return {
+    low:'<span class="badge badge-gray">Thấp</span>',
+    medium:'<span class="badge badge-info">Trung bình</span>',
+    high:'<span class="badge badge-warning">Cao</span>',
+    critical:'<span class="badge badge-danger">Khẩn cấp</span>',
+  }[p] || '';
+}
+function fbStatusBadge(s) {
+  return {
+    pending:'<span class="badge badge-warning"><i class="fas fa-clock"></i> Chờ xử lý</span>',
+    processing:'<span class="badge badge-info"><i class="fas fa-spinner"></i> Đang xử lý</span>',
+    done:'<span class="badge badge-success"><i class="fas fa-check"></i> Đã tiếp thu</span>',
+    noted:'<span class="badge badge-primary"><i class="fas fa-bookmark"></i> Đã ghi nhận</span>',
+    rejected:'<span class="badge badge-gray"><i class="fas fa-times"></i> Không áp dụng</span>',
+  }[s] || s;
+}
+
+function renderFeedbackList(items) {
+  const el = document.getElementById('fb-list');
+  if (!el) return;
+  if (!items.length) {
+    el.innerHTML = '<div class="empty-state"><i class="fas fa-comments"></i><p>Chưa có góp ý nào trong mục này.</p></div>';
+    return;
+  }
+  el.innerHTML = items.map(f => {
+    const d = f.createdAt?.toDate?.() || new Date(0);
+    const dateStr = d.toLocaleDateString('vi-VN', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const stars = f.star ? '★'.repeat(f.star) + '☆'.repeat(5-f.star) : '';
+    return `<div style="padding:14px 0;border-bottom:1px solid var(--border-light);cursor:pointer;" onclick="viewFeedback('${f.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+        <div style="font-size:13.5px;font-weight:700;color:var(--text-primary);flex:1;margin-right:10px;">${f.title}</div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">${fbPriorityBadge(f.priority)} ${fbStatusBadge(f.status)}</div>
+      </div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;line-height:1.5;">${(f.content||'').substring(0,120)}${f.content?.length>120?'...':''}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-muted);">
+        <span>${fbTypeLabel(f.type)} · <strong>${f.authorName||'Ẩn danh'}</strong> · ${f.authorDept||''}</span>
+        <span style="display:flex;align-items:center;gap:8px;">
+          ${stars ? `<span style="color:var(--accent);font-size:13px;">${stars}</span>` : ''}
+          ${dateStr}
+          ${f.adminReply ? '<span class="badge badge-success" style="font-size:10px;">Đã phản hồi</span>' : ''}
+        </span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// View single feedback
+async function viewFeedback(id) {
+  const snap = await window._fb.getDoc(window._fb.doc(window._fb.db, 'feedback', id));
+  if (!snap.exists()) return;
+  const f = {id: snap.id, ...snap.data()};
+  const isAdmin = ['quantri','bithuu'].includes(window.currentUserData?.role);
+  const d = f.createdAt?.toDate?.() || new Date(0);
+  const dateStr = d.toLocaleDateString('vi-VN', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const stars = f.star ? '★'.repeat(f.star) + '☆'.repeat(5-f.star) : 'Chưa đánh giá';
+  document.getElementById('vf-title').textContent = f.title;
+  document.getElementById('vf-body').innerHTML = `
+    <div style="background:var(--bg-main);border-radius:10px;padding:14px;margin-bottom:16px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+        ${fbTypeLabel(f.type)} ${fbPriorityBadge(f.priority)} ${fbStatusBadge(f.status)}
+        ${f.module ? `<span class="badge badge-gray">${f.module}</span>` : ''}
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);">
+        <strong>${f.authorName||'Ẩn danh'}</strong> · ${f.authorDept||''} · ${dateStr}
+        ${f.star ? `<span style="color:var(--accent);margin-left:8px;">${'★'.repeat(f.star)}${'☆'.repeat(5-f.star)}</span>` : ''}
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nội dung góp ý</label>
+      <div style="background:white;border:1.5px solid var(--border-light);border-radius:8px;padding:12px;font-size:13px;line-height:1.7;color:var(--text-primary);">${f.content||''}</div>
+    </div>
+    ${f.adminReply ? `<div class="form-group">
+      <label class="form-label" style="color:var(--success);"><i class="fas fa-reply"></i> Phản hồi từ Quản trị viên</label>
+      <div style="background:var(--success-light);border:1px solid #86c9a5;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;color:#155d35;">${f.adminReply}</div>
+    </div>` : ''}
+    ${isAdmin ? `
+    <div style="border-top:1px solid var(--border-light);margin-top:16px;padding-top:16px;">
+      <div class="form-group">
+        <label class="form-label">Cập nhật trạng thái</label>
+        <select class="form-control form-select" id="vf-status">
+          <option value="pending" ${f.status==='pending'?'selected':''}>Chờ xử lý</option>
+          <option value="processing" ${f.status==='processing'?'selected':''}>Đang xử lý</option>
+          <option value="done" ${f.status==='done'?'selected':''}>Đã tiếp thu</option>
+          <option value="noted" ${f.status==='noted'?'selected':''}>Đã ghi nhận</option>
+          <option value="rejected" ${f.status==='rejected'?'selected':''}>Không áp dụng</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Phản hồi của Quản trị viên</label>
+        <textarea class="form-control" id="vf-reply" rows="3" placeholder="Nhập phản hồi, giải thích hoặc thông báo tiến độ xử lý...">${f.adminReply||''}</textarea>
+      </div>
+    </div>` : ''}`;
+  document.getElementById('vf-footer').innerHTML = `
+    <button class="btn btn-outline" onclick="closeModal('modal-view-feedback')">Đóng</button>
+    ${isAdmin ? `<button class="btn btn-success" onclick="replyFeedback('${f.id}')"><i class="fas fa-floppy-disk"></i> Lưu phản hồi</button>` : ''}`;
+  openModal('modal-view-feedback');
+}
+
+// Admin reply
+async function replyFeedback(id) {
+  const status = document.getElementById('vf-status').value;
+  const reply = document.getElementById('vf-reply').value.trim();
+  try {
+    await fsUpdate('feedback', id, { status, adminReply: reply, repliedBy: window.currentUserData?.displayName || '' });
+    closeModal('modal-view-feedback');
+    showToast('Đã lưu phản hồi!', 'success');
+    loadFeedback();
+  } catch(e) { showToast('Lỗi: ' + e.message, 'danger'); }
+}
+
+// Export feedback report
+async function exportFeedbackReport() {
+  try {
+    const items = await fsGetAll('feedback');
+    if (!items.length) { showToast('Chưa có góp ý nào để xuất!', 'warning'); return; }
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('vi-VN');
+    const typeLabels = {bug:'Lỗi hệ thống',feature:'Đề xuất tính năng',ui:'Giao diện',other:'Khác'};
+    const statusLabels = {pending:'Chờ xử lý',processing:'Đang xử lý',done:'Đã tiếp thu',noted:'Đã ghi nhận',rejected:'Không áp dụng'};
+    const priorityLabels = {low:'Thấp',medium:'Trung bình',high:'Cao',critical:'Khẩn cấp'};
+    const avgStar = items.filter(f=>f.star).length ? (items.reduce((s,f)=>s+(f.star||0),0)/items.length).toFixed(1) : 'N/A';
+    let csv = '﻿'; // BOM for Vietnamese
+    csv += `BÁO CÁO TỔNG HỢP GÓP Ý & PHẢN HỒI HỆ THỐNG
+`;
+    csv += `Ngày xuất: ${dateStr}
+`;
+    csv += `Tổng số góp ý: ${items.length} | Chờ xử lý: ${items.filter(f=>f.status==='pending').length} | Đã tiếp thu: ${items.filter(f=>f.status==='done').length} | Điểm TB: ${avgStar}
+
+`;
+    csv += `STT,Tiêu đề,Loại,Mức độ,Trạng thái,Người gửi,Cơ quan,Đánh giá,Phản hồi QTV,Ngày gửi
+`;
+    items.forEach((f,i) => {
+      const d = f.createdAt?.toDate?.() || new Date(0);
+      const row = [
+        i+1,
+        `"${(f.title||'').replace(/"/g,'""')}"`,
+        typeLabels[f.type]||f.type,
+        priorityLabels[f.priority]||f.priority,
+        statusLabels[f.status]||f.status,
+        f.authorName||'',
+        f.authorDept||'',
+        f.star ? f.star+'★' : '',
+        `"${(f.adminReply||'').replace(/"/g,'""')}"`,
+        d.toLocaleDateString('vi-VN'),
+      ];
+      csv += row.join(',') + '
+';
+    });
+    const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `BaoCao_GopY_${now.toISOString().slice(0,10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+    showToast('Đã xuất báo cáo CSV!', 'success');
+  } catch(e) { showToast('Lỗi xuất báo cáo: ' + e.message, 'danger'); }
+}
+
 function exportReport(type) {
   showToast(`Đang tạo báo cáo ${type?.toUpperCase()||''}...`, 'info');
   setTimeout(()=>showToast('Tính năng xuất file đầy đủ cần tích hợp thư viện jsPDF/SheetJS. Xem hướng dẫn trong phần cấu hình.','warning'), 1500);
