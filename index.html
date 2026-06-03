@@ -1363,7 +1363,7 @@ function initApp() {
   document.getElementById('sb-name').textContent = u.displayName || u.email;
   const roleLabels = {bithuu:'Bí thư Chi bộ',quantri:'Quản trị viên',thuutruong:'Thủ trưởng CQ',capuy:'Cấp ủy',dangvien:'Đảng viên'};
   document.getElementById('sb-role').textContent = roleLabels[u.role] || u.role;
-  document.getElementById('dash-greeting').textContent = `Xin chào, ${u.displayName || 'đồng chí'}! 👋`;
+  document.getElementById('dash-greeting').textContent = `Xin chào, ${u.displayName || 'đồng chí'}! `;
   // Show/hide admin nav
   const isAdmin = ['quantri','bithuu'].includes(u.role);
   document.querySelectorAll('.role-admin').forEach(el=>{ el.style.display = isAdmin ? 'flex' : 'none'; });
@@ -1923,7 +1923,7 @@ async function loadRanking() {
       if(['done_early','done_ontime','done_late'].includes(t.status)){ scores[t.assigneeId].done++; scores[t.assigneeId].score+=t.score||0; }
     });
     const sorted = Object.entries(scores).sort((a,b)=>b[1].score-a[1].score);
-    const rankIcons = ['🥇','🥈','🥉'];
+    const rankIcons = ['1.','2.','3.'];
     document.getElementById('ranking-tbody').innerHTML = sorted.map(([id,d],i)=>{
       const base = d.total*10;
       const rate = base ? Math.round(d.score/base*100) : 0;
@@ -2246,14 +2246,14 @@ function setStar(n) {
   _currentFbRating = n;
   document.getElementById('nf-star').value = n;
   const labels = ['','Rất kém','Kém','Tạm được','Tốt','Rất tốt — Xuất sắc!'];
-  document.getElementById('star-label').textContent = '★'.repeat(n) + '☆'.repeat(5-n) + '  ' + labels[n];
+  document.getElementById('star-label').textContent = '\u2605'.repeat(n) + '\u2606'.repeat(5-n) + '  ' + labels[n];
   renderStars(n);
 }
 function hoverStar(n) { renderStars(n); }
 function resetStars() { renderStars(_currentFbRating); }
 function renderStars(n) {
   const stars = document.querySelectorAll('#star-rating span');
-  stars.forEach((s,i) => { s.textContent = i < n ? '★' : '☆'; s.style.color = i < n ? 'var(--accent)' : 'var(--text-muted)'; });
+  stars.forEach((s,i) => { s.textContent = i < n ? '\u2605' : '\u2606'; s.style.color = i < n ? 'var(--accent)' : 'var(--text-muted)'; });
 }
 
 // Tab filter
@@ -2285,7 +2285,7 @@ async function saveFeedback() {
       repliedBy: '',
     });
     closeModal('modal-new-feedback');
-    showToast('Đã gửi góp ý! Cảm ơn bạn 🙏', 'success');
+    showToast('Đã gửi góp ý! Cảm ơn bạn ', 'success');
     // Reset form
     document.getElementById('nf-title').value = '';
     document.getElementById('nf-content').value = '';
@@ -2320,7 +2320,7 @@ async function loadFeedback() {
     document.getElementById('fb-total').textContent = total;
     document.getElementById('fb-pending').textContent = pending;
     document.getElementById('fb-done').textContent = done;
-    document.getElementById('fb-avgstar').textContent = avgStar !== '--' ? avgStar + '★' : '--';
+    document.getElementById('fb-avgstar').textContent = avgStar !== '--' ? avgStar + '\u2605' : '--';
     document.getElementById('fb-big-star').textContent = avgStar !== '--' ? avgStar : '--';
     // Badge
     const badge = document.getElementById('fb-badge');
@@ -2347,7 +2347,7 @@ function renderStarBars(items) {
     const count = items.filter(f => f.star === s).length;
     const pct = items.length ? Math.round(count / items.length * 100) : 0;
     html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:12px;">
-      <span style="width:30px;color:var(--accent);font-weight:700;">${s}★</span>
+      <span style="width:30px;color:var(--accent);font-weight:700;">${s}\u2605</span>
       <div style="flex:1;background:var(--bg-main);border-radius:4px;height:8px;overflow:hidden;">
         <div style="width:${pct}%;height:8px;background:var(--accent);border-radius:4px;"></div>
       </div>
@@ -2360,7 +2360,7 @@ function renderStarBars(items) {
 function renderCategoryChart(items) {
   const el = document.getElementById('fb-category-chart');
   if (!el) return;
-  const cats = {bug:'🐛 Lỗi hệ thống',feature:'💡 Đề xuất tính năng',ui:'🎨 Giao diện',other:'📝 Khác'};
+  const cats = {bug:'Lỗi hệ thống',feature:'Đề xuất tính năng',ui:'Giao diện',other:'Khác'};
   const colors = {bug:'var(--danger)',feature:'var(--success)',ui:'var(--info)',other:'var(--text-muted)'};
   let html = '';
   Object.entries(cats).forEach(([key, label]) => {
@@ -2398,7 +2398,7 @@ function renderUrgentList(items) {
 }
 
 function fbTypeLabel(t) {
-  return {bug:'🐛 Lỗi',feature:'💡 Đề xuất',ui:'🎨 Giao diện',other:'📝 Khác'}[t] || t;
+  return {bug:'Bug Lỗi',feature:'Idea Đề xuất',ui:'Giao diện',other:'Khác'}[t] || t;
 }
 function fbPriorityBadge(p) {
   return {
@@ -2428,7 +2428,7 @@ function renderFeedbackList(items) {
   el.innerHTML = items.map(f => {
     const d = f.createdAt?.toDate?.() || new Date(0);
     const dateStr = d.toLocaleDateString('vi-VN', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-    const stars = f.star ? '★'.repeat(f.star) + '☆'.repeat(5-f.star) : '';
+    const stars = f.star ? '\u2605'.repeat(f.star) + '\u2606'.repeat(5-f.star) : '';
     return `<div style="padding:14px 0;border-bottom:1px solid var(--border-light);cursor:pointer;" onclick="viewFeedback('${f.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
         <div style="font-size:13.5px;font-weight:700;color:var(--text-primary);flex:1;margin-right:10px;">${f.title}</div>
@@ -2455,7 +2455,7 @@ async function viewFeedback(id) {
   const isAdmin = ['quantri','bithuu'].includes(window.currentUserData?.role);
   const d = f.createdAt?.toDate?.() || new Date(0);
   const dateStr = d.toLocaleDateString('vi-VN', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  const stars = f.star ? '★'.repeat(f.star) + '☆'.repeat(5-f.star) : 'Chưa đánh giá';
+  const stars = f.star ? '\u2605'.repeat(f.star) + '\u2606'.repeat(5-f.star) : 'Chưa đánh giá';
   document.getElementById('vf-title').textContent = f.title;
   document.getElementById('vf-body').innerHTML = `
     <div style="background:var(--bg-main);border-radius:10px;padding:14px;margin-bottom:16px;">
@@ -2465,7 +2465,7 @@ async function viewFeedback(id) {
       </div>
       <div style="font-size:12px;color:var(--text-muted);">
         <strong>${f.authorName||'Ẩn danh'}</strong> · ${f.authorDept||''} · ${dateStr}
-        ${f.star ? `<span style="color:var(--accent);margin-left:8px;">${'★'.repeat(f.star)}${'☆'.repeat(5-f.star)}</span>` : ''}
+        ${f.star ? `<span style="color:var(--accent);margin-left:8px;">${'\u2605'.repeat(f.star)}${'\u2606'.repeat(5-f.star)}</span>` : ''}
       </div>
     </div>
     <div class="form-group">
@@ -2537,7 +2537,7 @@ async function exportFeedbackReport() {
         statusLabels[f.status]||f.status,
         f.authorName||'',
         f.authorDept||'',
-        f.star ? f.star+'★' : '',
+        f.star ? f.star+'\u2605' : '',
         `"${(f.adminReply||'').replace(/"/g,'""')}"`,
         d.toLocaleDateString('vi-VN'),
       ];
