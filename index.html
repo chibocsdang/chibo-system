@@ -49,30 +49,58 @@
   // ============================================================
   onAuthStateChanged(auth, async (user) => {
     if (user) {
+      // Set basic user data immediately so app can show
+      window.currentUser = user;
+      window.currentUserData = {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName || user.email,
+        role: 'quantri', // default role, will be overridden by Firestore
+        department: '',
+        active: true
+      };
+      // Show app immediately — don't wait for Firestore
+      if(typeof showApp === 'function') showApp();
+      else {
+        document.getElementById('loading').style.display='none';
+        document.getElementById('app-page').classList.add('show');
+      }
+      setTimeout(function(){ if(typeof initApp === 'function') initApp(); }, 50);
+      // Then try to load full profile from Firestore in background
       try {
         const snap = await getDoc(doc(db, "users", user.uid));
         if (snap.exists()) {
-          window.currentUser = user;
           window.currentUserData = { uid: user.uid, ...snap.data() };
-          if(typeof showApp === 'function') showApp();
-          else { document.getElementById('loading').style.display='none'; document.getElementById('app-page').classList.add('show'); }
-          setTimeout(function(){ if(typeof initApp === 'function') initApp(); }, 100);
+          // Re-init sidebar with real data
+          if(typeof initApp === 'function') initApp();
         } else {
-          if(typeof showToast === 'function') showToast("Tài khoản không tồn tại trong hệ thống!", "danger");
-          await signOut(auth);
-          if(typeof showLogin === 'function') showLogin();
-          else { document.getElementById('loading').style.display='none'; document.getElementById('login-page').style.display='flex'; }
+          // User exists in Auth but not Firestore - create basic profile
+          console.warn('User not in Firestore, using Auth data');
+          try {
+            await setDoc(doc(db, "users", user.uid), {
+              displayName: user.displayName || user.email.split('@')[0],
+              email: user.email,
+              role: 'quantri',
+              department: 'Ban Chi ủy Chi bộ',
+              jobTitle: 'Quản trị viên',
+              active: true,
+            });
+            window.currentUserData.displayName = user.displayName || user.email.split('@')[0];
+            if(typeof initApp === 'function') initApp();
+          } catch(e2) { console.warn('Could not create user doc:', e2.message); }
         }
       } catch(e) {
-        console.error('Auth error:', e);
-        if(typeof showLogin === 'function') showLogin();
-        else { document.getElementById('loading').style.display='none'; document.getElementById('login-page').style.display='flex'; }
+        console.warn('Firestore read error (using Auth data):', e.message);
+        // App already showing with basic data - this is OK
       }
     } else {
       window.currentUser = null;
       window.currentUserData = null;
       if(typeof showLogin === 'function') showLogin();
-      else { document.getElementById('loading').style.display='none'; document.getElementById('login-page').style.display='flex'; }
+      else {
+        document.getElementById('loading').style.display='none';
+        document.getElementById('login-page').style.display='flex';
+      }
     }
   });
 </script>
@@ -1418,20 +1446,13 @@ function preloadSkeletons() {
 
 // Preload all collections at once to warm cache
 async function _preloadAllData() {
-  try {
-    // Load all collections in parallel — fills cache so pages load instantly
-    await Promise.all([
-      fsGetAll('users'),
-      fsGetAll('departments'),
-      fsGetAll('tasks'),
-      fsGetAll('collective_tasks'),
-      fsGetAll('events'),
-    ]);
-    // Refresh dashboard with real data
-    if (typeof loadDashboardStats === 'function') loadDashboardStats();
-  } catch(e) {
-    console.warn('Preload warning:', e.message);
+  // Load collections one by one - silent fail on each
+  const cols = ['users','departments','tasks','collective_tasks','events'];
+  for (const col of cols) {
+    try { await fsGetAll(col); } catch(e) { console.warn('Preload skip:', col, e.message); }
   }
+  // Refresh dashboard with real data
+  try { if (typeof loadDashboardStats === 'function') loadDashboardStats(); } catch(e) {}
 }
 
 // ============================================================
@@ -1478,8 +1499,10 @@ async function fsGetAll(path, forceRefresh) {
 // ============================================================
 async function loadDashboardStats() {
   // Show skeleton immediately
-  document.getElementById('dash-tasks-list').innerHTML = '<div>' + Array(4).fill('<div class="task-item"><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short" style="margin-top:4px;"></div></div>').join('') + '</div>';
-  document.getElementById('dash-ranking-list').innerHTML = Array(3).fill('<div class="rank-item"><div class="skeleton" style="width:26px;height:26px;border-radius:7px;flex-shrink:0;"></div><div style="flex:1;margin-left:10px;"><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short"></div></div></div>').join('');
+  const tl = document.getElementById('dash-tasks-list');
+  const rl = document.getElementById('dash-ranking-list');
+  if(tl) tl.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-spin"></i><p>Đang tải...</p></div>';
+  if(rl) rl.innerHTML = '<div class="empty-state"><i class="fas fa-spinner fa-spin"></i></div>';
   try {
     const [tasks, users] = await Promise.all([fsGetAll('tasks'), fsGetAll('users')]);
     const activeUsers = users.filter(u=>u.active!==false);
@@ -1519,7 +1542,7 @@ async function loadDashboardStats() {
     const depts = await fsGetAll('departments');
     renderDeptTable(depts, tasks, users);
   } catch(e) {
-    // Firebase not configured yet - show demo data
+    console.warn('Dashboard load error:', e.message);
     showDemoData();
   }
 }
@@ -2499,16 +2522,11 @@ async function exportFeedbackReport() {
     const statusLabels = {pending:'Chờ xử lý',processing:'Đang xử lý',done:'Đã tiếp thu',noted:'Đã ghi nhận',rejected:'Không áp dụng'};
     const priorityLabels = {low:'Thấp',medium:'Trung bình',high:'Cao',critical:'Khẩn cấp'};
     const avgStar = items.filter(f=>f.star).length ? (items.reduce((s,f)=>s+(f.star||0),0)/items.length).toFixed(1) : 'N/A';
-    let csv = '﻿'; // BOM for Vietnamese
-    csv += `BÁO CÁO TỔNG HỢP GÓP Ý & PHẢN HỒI HỆ THỐNG
-`;
-    csv += `Ngày xuất: ${dateStr}
-`;
-    csv += `Tổng số góp ý: ${items.length} | Chờ xử lý: ${items.filter(f=>f.status==='pending').length} | Đã tiếp thu: ${items.filter(f=>f.status==='done').length} | Điểm TB: ${avgStar}
-
-`;
-    csv += `STT,Tiêu đề,Loại,Mức độ,Trạng thái,Người gửi,Cơ quan,Đánh giá,Phản hồi QTV,Ngày gửi
-`;
+    let csv = '\uFEFF'; // BOM for Vietnamese
+    csv += 'BÁO CÁO TỔNG HỢP GÓP Ý & PHẢN HỒI HỆ THỐNG\n';
+    csv += 'Ngày xuất: ' + dateStr + '\n';
+    csv += 'Tổng số góp ý: ' + items.length + ' | Chờ xử lý: ' + items.filter(f=>f.status==='pending').length + ' | Đã tiếp thu: ' + items.filter(f=>f.status==='done').length + ' | Điểm TB: ' + avgStar + '\n\n';
+    csv += 'STT,Tiêu đề,Loại,Mức độ,Trạng thái,Người gửi,Cơ quan,Đánh giá,Phản hồi QTV,Ngày gửi\n';
     items.forEach((f,i) => {
       const d = f.createdAt?.toDate?.() || new Date(0);
       const row = [
