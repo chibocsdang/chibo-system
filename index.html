@@ -98,6 +98,23 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Mulish',sans-serif;background:var(--bg-main);color:var(--text-primary);min-height:100vh;}
 
+
+/* ===== SKELETON LOADING ===== */
+.skeleton {
+  background: linear-gradient(90deg, #f0f4f9 25%, #e8eef5 50%, #f0f4f9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+  display: inline-block;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton-line { height: 12px; margin-bottom: 8px; width: 100%; }
+.skeleton-line.short { width: 60%; }
+.skeleton-line.medium { width: 80%; }
+
 /* ===== LOGIN PAGE ===== */
 #login-page {
   min-height:100vh; display:flex; align-items:center; justify-content:center;
@@ -438,6 +455,25 @@ textarea.form-control{resize:vertical;min-height:78px;}
 .notif-icon.dang{background:var(--danger-light);color:var(--danger);}
 .notif-title{font-size:12.5px;font-weight:700;color:var(--text-primary);}
 .notif-time{font-size:11px;color:var(--text-muted);margin-top:1px;}
+
+/* ===== SKELETON LOADING ===== */
+.skeleton {
+  background: linear-gradient(90deg, #edf2f8 25%, #e2eaf4 50%, #edf2f8 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 6px;
+  display: block;
+}
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+.sk-line { height: 10px; margin-bottom: 8px; }
+.sk-line.w30 { width: 30%; }
+.sk-line.w50 { width: 50%; }
+.sk-line.w70 { width: 70%; }
+.sk-line.w100 { width: 100%; }
+.sk-card { padding: 14px; border-radius: 10px; border: 1px solid var(--border-light); margin-bottom: 10px; }
+.sk-row { display: flex; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-light); }
+.sk-circle { width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; }
+.sk-block { height: 80px; border-radius: 10px; }
 </style>
 </head>
 <body>
@@ -599,7 +635,7 @@ textarea.form-control{resize:vertical;min-height:78px;}
           <button class="btn btn-accent" onclick="openModal('modal-new-task')"><i class="fas fa-plus"></i> Thêm nhiệm vụ</button>
         </div>
         <div class="filter-bar">
-          <div class="search-bar" style="flex:1;max-width:300px;"><i class="fas fa-search" style="color:var(--text-muted);font-size:13px;"></i><input type="text" placeholder="Tìm kiếm nhiệm vụ..." id="task-search" oninput="filterTasks()"></div>
+          <div class="search-bar" style="flex:1;max-width:300px;"><i class="fas fa-search" style="color:var(--text-muted);font-size:13px;"></i><input type="text" placeholder="Tìm kiếm nhiệm vụ..." id="task-search" oninput="_debouncedFilter()"></div>
           <div class="filter-chip active" onclick="filterChip(this,'task-type','')">Tất cả</div>
           <div class="filter-chip" onclick="filterChip(this,'task-type','Đảng viên')">Đảng viên</div>
           <div class="filter-chip" onclick="filterChip(this,'task-type','Chuyên môn')">Chuyên môn</div>
@@ -1128,9 +1164,33 @@ const firebaseConfig = {
 <div class="toast-wrap" id="toast-wrap"></div>
 
 <script>
+
+// ============================================================
+// FIREBASE CACHE — Tối ưu tốc độ tải trang
+// ============================================================
+const _fbCache = {};
+const _CACHE_MS = 90000; // Cache 90 giây
+
+function _getCached(path) {
+  const c = _fbCache[path];
+  return (c && Date.now() - c.t < _CACHE_MS) ? c.d : null;
+}
+function _setCached(path, data) { _fbCache[path] = {d: data, t: Date.now()}; }
+function _clearCached(path) { if(path) delete _fbCache[path]; else Object.keys(_fbCache).forEach(k=>delete _fbCache[k]); }
+
+
 // ============================================================
 // UTILITIES
 // ============================================================
+
+// Debounce for search filters
+var _filterTimer = null;
+function _debouncedFilter() {
+  clearTimeout(_filterTimer);
+  _filterTimer = setTimeout(filterTasks, 300);
+}
+
+
 function showToast(msg, type='info') {
   const icons = {success:'fa-check-circle',danger:'fa-circle-xmark',warning:'fa-triangle-exclamation',info:'fa-circle-info'};
   const wrap = document.getElementById('toast-wrap');
@@ -1262,15 +1322,8 @@ function showPage(id) {
   const t = pageTitles[id];
   if(t){ document.getElementById('topbar-title').textContent=t[0]; document.getElementById('topbar-sub').textContent=t[1]; }
   // Lazy load
-  if(id==='tasks') loadTasks();
-  if(id==='members') loadMembers();
-  if(id==='permissions') loadAccounts();
-  if(id==='ranking') loadRanking();
-  if(id==='collective') loadCollective();
-  if(id==='alerts') loadAlerts();
-  if(id==='departments') loadDepartments();
-  if(id==='feedback') loadFeedback();
-  if(id==='calendar') renderCalendar();
+  const _loaders = {tasks:loadTasks,members:loadMembers,permissions:loadAccounts,ranking:loadRanking,collective:loadCollective,alerts:loadAlerts,departments:loadDepartments,feedback:loadFeedback,calendar:renderCalendar};
+  if(_loaders[id]) { try { _loaders[id](); } catch(e){ console.warn('Load error:',e); } }
 }
 
 function initApp() {
@@ -1289,6 +1342,10 @@ function initApp() {
   // Date
   updateDate();
   setInterval(updateDate, 60000);
+  // Pre-show skeletons immediately
+  preloadSkeletons();
+  // Load ALL data at once in background (warms up cache)
+  _preloadAllData();
   // Load dashboard data
   loadDashboardStats();
   populateMonthFilter();
@@ -1316,6 +1373,67 @@ function toggleMobileMenu() {
   document.getElementById('sidebar').classList.toggle('mobile-open');
 }
 
+
+// ============================================================
+// SKELETON HELPERS — Hiện ngay trong khi chờ Firebase
+// ============================================================
+function skLines(widths) {
+  return widths.map(w => `<div class="skeleton sk-line ${w}"></div>`).join('');
+}
+function skRows(n) {
+  return Array(n).fill(0).map(() => `
+    <div class="sk-row">
+      <div class="skeleton sk-circle"></div>
+      <div style="flex:1;">${skLines(['w70','w50'])}</div>
+      <div class="skeleton sk-line w30" style="width:60px;"></div>
+    </div>`).join('');
+}
+function skCards(n) {
+  return `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">` +
+    Array(n).fill(0).map(()=>`<div class="sk-card"><div class="skeleton sk-block" style="height:50px;margin-bottom:10px;"></div>${skLines(['w70','w50'])}</div>`).join('') + '</div>';
+}
+function skTable(rows, cols) {
+  return `<table><thead><tr>${Array(cols).fill('<th>&nbsp;</th>').join('')}</tr></thead><tbody>` +
+    Array(rows).fill(0).map(()=>`<tr>${Array(cols).fill(0).map(()=>`<td><div class="skeleton sk-line w70"></div></td>`).join('')}</tr>`).join('') + '</tbody></table>';
+}
+
+// Pre-populate pages with skeleton before Firebase loads
+function preloadSkeletons() {
+  const targets = {
+    'tasks-tbody': () => `<tr><td colspan="9"><div style="padding:8px 0;">${skRows(5)}</div></td></tr>`,
+    'members-grid': () => skCards(8),
+    'depts-grid': () => skCards(5),
+    'ranking-tbody': () => `<tr><td colspan="9"><div style="padding:8px 0;">${skRows(6)}</div></td></tr>`,
+    'accounts-tbody': () => `<tr><td colspan="7"><div style="padding:8px 0;">${skRows(4)}</div></td></tr>`,
+    'collective-tbody': () => `<tr><td colspan="8"><div style="padding:8px 0;">${skRows(4)}</div></td></tr>`,
+    'overdue-list': () => skRows(3),
+    'confirm-list': () => skRows(2),
+    'fb-list': () => skRows(4),
+  };
+  Object.entries(targets).forEach(([id, fn]) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = fn();
+  });
+}
+
+// Preload all collections at once to warm cache
+async function _preloadAllData() {
+  try {
+    // Load all collections in parallel — fills cache so pages load instantly
+    await Promise.all([
+      fsGetAll('users'),
+      fsGetAll('departments'),
+      fsGetAll('tasks'),
+      fsGetAll('collective_tasks'),
+      fsGetAll('events'),
+    ]);
+    // Refresh dashboard with real data
+    if (typeof loadDashboardStats === 'function') loadDashboardStats();
+  } catch(e) {
+    console.warn('Preload warning:', e.message);
+  }
+}
+
 // ============================================================
 // FIRESTORE HELPERS
 // ============================================================
@@ -1327,26 +1445,43 @@ function fsCol(path) { return window._fb.collection(window._fb.db, path); }
 function fsDoc(path, id) { return window._fb.doc(window._fb.db, path, id); }
 async function fsAdd(path, data) {
   data.createdAt = window._fb.serverTimestamp();
-  data.createdBy = window.currentUser.uid;
-  return await window._fb.addDoc(window._fb.collection(window._fb.db, path), data);
+  data.createdBy = window.currentUser?.uid || '';
+  const result = await window._fb.addDoc(window._fb.collection(window._fb.db, path), data);
+  _clearCached(path);
+  return result;
 }
 async function fsUpdate(path, id, data) {
   data.updatedAt = window._fb.serverTimestamp();
-  data.updatedBy = window.currentUser.uid;
-  return await window._fb.updateDoc(window._fb.doc(window._fb.db, path, id), data);
+  data.updatedBy = window.currentUser?.uid || '';
+  const result = await window._fb.updateDoc(window._fb.doc(window._fb.db, path, id), data);
+  _clearCached(path);
+  return result;
 }
-async function fsGetAll(path) {
-  const snap = await window._fb.getDocs(window._fb.collection(window._fb.db, path));
-  return snap.docs.map(d=>({id:d.id,...d.data()}));
+async function fsGetAll(path, forceRefresh) {
+  if (!forceRefresh) {
+    const cached = _getCached(path);
+    if (cached) return cached;
+  }
+  try {
+    const snap = await window._fb.getDocs(window._fb.collection(window._fb.db, path));
+    const data = snap.docs.map(d=>({id:d.id,...d.data()}));
+    _setCached(path, data);
+    return data;
+  } catch(e) {
+    console.warn('fsGetAll error for', path, e.message);
+    return _getCached(path) || [];
+  }
 }
 
 // ============================================================
 // DASHBOARD
 // ============================================================
 async function loadDashboardStats() {
+  // Show skeleton immediately
+  document.getElementById('dash-tasks-list').innerHTML = '<div>' + Array(4).fill('<div class="task-item"><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short" style="margin-top:4px;"></div></div>').join('') + '</div>';
+  document.getElementById('dash-ranking-list').innerHTML = Array(3).fill('<div class="rank-item"><div class="skeleton" style="width:26px;height:26px;border-radius:7px;flex-shrink:0;"></div><div style="flex:1;margin-left:10px;"><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short"></div></div></div>').join('');
   try {
-    const tasks = await fsGetAll('tasks');
-    const users = await fsGetAll('users');
+    const [tasks, users] = await Promise.all([fsGetAll('tasks'), fsGetAll('users')]);
     const activeUsers = users.filter(u=>u.active!==false);
     const now = new Date();
     const monthTasks = tasks.filter(t=>{
@@ -1498,7 +1633,9 @@ function filterTasks() {
 }
 
 function renderTasksTable(tasks) {
-  if(!tasks.length){ document.getElementById('tasks-tbody').innerHTML='<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><p>Không có nhiệm vụ nào.</p></div></td></tr>'; return; }
+  // Limit to 50 rows for performance
+  const displayTasks = tasks.slice(0, 50);
+  if(!displayTasks.length){ document.getElementById('tasks-tbody').innerHTML='<tr><td colspan="9"><div class="empty-state"><i class="fas fa-inbox"></i><p>Không có nhiệm vụ nào.</p></div></td></tr>'; return; }
   const statusMap = {
     todo:'<span class="badge badge-gray">Chưa thực hiện</span>',
     doing:'<span class="badge badge-info">Đang thực hiện</span>',
