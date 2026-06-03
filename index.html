@@ -54,20 +54,25 @@
         if (snap.exists()) {
           window.currentUser = user;
           window.currentUserData = { uid: user.uid, ...snap.data() };
-          showApp();
-          initApp();
+          if(typeof showApp === 'function') showApp();
+          else { document.getElementById('loading').style.display='none'; document.getElementById('app-page').classList.add('show'); }
+          setTimeout(function(){ if(typeof initApp === 'function') initApp(); }, 100);
         } else {
-          showToast("Tài khoản không tồn tại trong hệ thống!", "danger");
+          if(typeof showToast === 'function') showToast("Tài khoản không tồn tại trong hệ thống!", "danger");
           await signOut(auth);
-          showLogin();
+          if(typeof showLogin === 'function') showLogin();
+          else { document.getElementById('loading').style.display='none'; document.getElementById('login-page').style.display='flex'; }
         }
       } catch(e) {
-        showLogin();
+        console.error('Auth error:', e);
+        if(typeof showLogin === 'function') showLogin();
+        else { document.getElementById('loading').style.display='none'; document.getElementById('login-page').style.display='flex'; }
       }
     } else {
       window.currentUser = null;
       window.currentUserData = null;
-      showLogin();
+      if(typeof showLogin === 'function') showLogin();
+      else { document.getElementById('loading').style.display='none'; document.getElementById('login-page').style.display='flex'; }
     }
   });
 </script>
@@ -1151,16 +1156,30 @@ window._taskTypeFilter = '';
 // AUTH FUNCTIONS
 // ============================================================
 function showLogin() {
-  document.getElementById('loading').style.display = 'none';
-  document.getElementById('login-page').style.display = 'flex';
-  document.getElementById('app-page').classList.remove('show');
+  var el = document.getElementById('loading');
+  if(el) el.style.display = 'none';
+  var lp = document.getElementById('login-page');
+  if(lp) lp.style.display = 'flex';
+  var ap = document.getElementById('app-page');
+  if(ap) ap.classList.remove('show');
 }
 function showApp() {
-  document.getElementById('loading').style.display = 'none';
-  document.getElementById('login-page').style.display = 'none';
-  document.getElementById('app-page').classList.add('show');
+  var el = document.getElementById('loading');
+  if(el) el.style.display = 'none';
+  var lp = document.getElementById('login-page');
+  if(lp) lp.style.display = 'none';
+  var ap = document.getElementById('app-page');
+  if(ap) ap.classList.add('show');
 }
-function hideLoading() { document.getElementById('loading').style.display = 'none'; }
+function hideLoading() {
+  var el = document.getElementById('loading');
+  if(el) el.style.display = 'none';
+}
+// Expose to global scope for Firebase module script
+window.showLogin = showLogin;
+window.showApp = showApp;
+window.hideLoading = hideLoading;
+window.initApp = function() { if(typeof initApp === 'function') initApp(); };
 
 async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
@@ -2389,13 +2408,15 @@ function exportReport(type) {
 // ============================================================
 // hideLoading is called by onAuthStateChanged (showLogin or showApp)
 // Add timeout fallback in case Firebase fails to respond
+// Auto-hide loading after 5 seconds if Firebase doesn't respond
 setTimeout(function() {
   var loading = document.getElementById('loading');
   if (loading && loading.style.display !== 'none') {
-    hideLoading();
-    showLogin();
+    loading.style.display = 'none';
+    var lp = document.getElementById('login-page');
+    if (lp) lp.style.display = 'flex';
   }
-}, 8000);
+}, 5000);
 updateDate();
 </script>
 </body>
